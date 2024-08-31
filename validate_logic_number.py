@@ -1,9 +1,13 @@
 import re
-from flask import Flask, request, jsonify
+import json
 
-app = Flask(__name__)
+class ErrInvalidParam(Exception):
+    def __init__(self, value=None, msg=None) -> None:
+        if not msg:
+            msg = f"Invalid parameter found, please validate.\nValue: {value}"
+        super().__init__(msg)
 
-def handle_data(data):
+def handle_data(data) -> any:
     '''
     Processa os dados recebidos pelo JSON e trata inconsistências.
 
@@ -12,32 +16,37 @@ def handle_data(data):
 
     Returns:
         tuple: (adquirence_lower, logic_number, code) se todos os dados forem válidos.
-        Response: Resposta JSON com mensagem de erro e código de status HTTP, se houver erro nos dados.
+        str: Mensagem de erro se houver erro nos dados.
     '''
-    adquirence = data.get("adquirente")
-    logic_number = data.get("logico")
-    code = data.get("codigo")
-    
-    if not adquirence:
-        return jsonify({"Error": "invalid adquirence"}), 400
-    elif not logic_number:
-        return jsonify({"Error": "invalid logic number"}), 400
-    elif not code:
-        return jsonify({"Error": "invalid code number"}), 400
-    
+    try:
+        adquirence = data.get("adquirente")
+        logic_number = data.get("logico")
+        code = data.get("codigo")
+        
+        if not adquirence:
+            raise ErrInvalidParam(adquirence, "Adquirente não fornecido.")
+        elif not logic_number:
+            raise ErrInvalidParam(logic_number, "Número lógico não fornecido.")
+        elif not code:
+            raise ErrInvalidParam(code, "Código não fornecido.")
+
+    except ErrInvalidParam as e:
+        return str(e)
+
     adquirence_lower = adquirence.lower()
-    valid_adquirences = {"bin", "getnetlac", "safra", "sipag", "stone", "vero", "adiq", "bigcard", "biz", 
-                         "brasil card", "cabal", "cardse", "carto", "comprocard", "convcard", "credishop", 
-                         "ctf frota", "fitcard", "globalpayments", "marketpay", "mettacard", "orgcard", 
-                         "portalcard", "rede", "resomaq", "softnex", "telenet", "valecard", "valeshop", "cielo"}
+    valid_adquirences = {
+        "bin", "getnetlac", "safra", "sipag", "stone", "vero", "adiq", "bigcard", "biz", 
+        "brasil card", "cabal", "cardse", "carto", "comprocard", "convcard", "credishop", 
+        "ctf frota", "fitcard", "globalpayments", "marketpay", "mettacard", "orgcard", 
+        "portalcard", "rede", "resomaq", "softnex", "telenet", "valecard", "valeshop", "cielo"
+    }
     
     if adquirence_lower in valid_adquirences:
         return adquirence_lower, logic_number, code
     else:
-        return jsonify({"Error": "unsupported adquirence type"}), 400
+        return "unsupported adquirence type"
 
-
-def process_data(adquirence, logic_number):
+def process_data(adquirence, logic_number) -> str:
     """
     Processa o número lógico baseado no tipo de adquirente.
 
@@ -47,8 +56,6 @@ def process_data(adquirence, logic_number):
 
     Returns:
         str: O número lógico processado. 
-        Se o adquirente for um dos seguintes: "bin", "fitcard", "getnetlac", "policard", "safra", "sipag", "siscred", "softnex", ou "valeshop", 
-        o número lógico será preenchido com zeros à esquerda até ter 15 dígitos. Caso contrário, o número lógico será retornado como está.
     """
     match adquirence:
         case "bin" | "fitcard" | "getnetlac" | "policard" | "safra" | "sipag" | "siscred" | "softnex" | "valeshop":
@@ -56,60 +63,62 @@ def process_data(adquirence, logic_number):
         case _: 
             return logic_number
 
-
-@app.route('/validate-logic-number', methods=['POST'])
-def validate_logic_number():
+def validate_logic_number(data) -> dict:
     """
     Valida o número lógico e o código baseado no tipo de adquirente recebido via requisição HTTP POST.
-
-    A função extrai dados JSON da requisição recebida, processa o número lógico com base no tipo de adquirente,
-    e valida os campos de acordo com as regras específicas para cada tipo de adquirente.
 
     Requisição esperada:
         - JSON com as chaves "adquirente", "logico" e "codigo".
 
     Returns:
-        Response: Um objeto de resposta Flask contendo:
-            - JSON com a mensagem de sucesso ou erro.
-            - Código de status HTTP:
-                - 200 para sucesso.
-                - 400 para erros de validação ou tipos de adquirente não suportados.
+        dict: JSON com a mensagem de sucesso ou erro
     """
-    data = request.json
-    
-    result = handle_data(data)
-    if isinstance(result, tuple):
-        adquirence, logic_number, code = result
-    else:
-        return result
+    try:
+        if not isinstance(data, dict):
+            raise TypeError("O argumento deve ser um dicionário JSON")
+        
+        result = handle_data(data)
+        if isinstance(result, tuple):
+            adquirence, logic_number, code = result
+        else:
+            return {"Error": result}
 
-    logic_number = process_data(adquirence, logic_number)
-    
-    match adquirence:
-        case "adiq" | "bigcard" | "biz" | "brasil card" | "cabal" | "cardse" | "carto" | "comprocard" | "convcard" | "credishop" | "ctf frota" | "fitcard" | "globalpayments" | "marketpay" | "mettacard" | "orgcard" | "portalcard" | "rede" | "resomaq" | "softnex" | "telenet" | "valecard" | "valeshop":
-            if re.match(r"^\d{15}$", logic_number):
-                return jsonify({"Success": f"{adquirence} processed with logic number {logic_number}"}), 200
+        logic_number = process_data(adquirence, logic_number)
+        
+        match adquirence:
+            case "adiq" | "bigcard" | "biz" | "brasil card" | "cabal" | "cardse" | "carto" | "comprocard" | "convcard" | "credishop" | "ctf frota" | "fitcard" | "globalpayments" | "marketpay" | "mettacard" | "orgcard" | "portalcard" | "rede" | "resomaq" | "softnex" | "telenet" | "valecard" | "valeshop":
+                if re.match(r"^\d{15}$", logic_number):
+                    return {"Success": f"{adquirence} processed with logic number {logic_number}"}
 
-        case "bin" | "getnetlac" | "safra" | "sipag":
-            if re.match(r"^\d{15}$", logic_number) and re.match(r"^TF[a-zA-Z0-9]{8}$", code):
-                return jsonify({"Success": f"{adquirence} processed with logic number {logic_number} and code {code}"}), 200
+            case "bin" | "getnetlac" | "safra" | "sipag":
+                if re.match(r"^\d{15}$", logic_number) and re.match(r"^TF[a-zA-Z0-9]{8}$", code):
+                    return {"Success": f"{adquirence} processed with logic number {logic_number} and code {code}"}
 
-        case "cielo":
-            if re.match(r"^4\d{8}$", logic_number):
-                return jsonify({"Success": f"{adquirence} processed with logic number {logic_number}"}), 200
-            else:
-                return jsonify({"Error": "Logic number does not match the param"}), 400
+            case "cielo":
+                if re.match(r"^4\d{8}$", logic_number):
+                    return {"Success": f"{adquirence} processed with logic number {logic_number}"}
+                else:
+                    return {"Error": "Logic number does not match the param"}
 
-        case "stone":
-            if re.match(r"^[a-zA-Z0-9]{32}$", logic_number) and re.match(r"^\d{9}$", code):
-                return jsonify({"Success": f"{adquirence} processed with logic number {logic_number} and code {code}"}), 200
+            case "stone":
+                if re.match(r"^[a-zA-Z0-9]{32}$", logic_number) and re.match(r"^\d{9}$", code):
+                    return {"Success": f"{adquirence} processed with logic number {logic_number} and code {code}"}
 
-        case "vero" | "josias":
-            return jsonify({"Info": f"{adquirence} is not yet supported"}), 200
+            case "vero" | "josias":
+                return {"Info": f"{adquirence} is not yet supported"}
 
-        case _:
-            return jsonify({"Error": "Unsupported adquirence type"}), 400
-
+            case _:
+                return {"Error": "Unsupported adquirence type"}
+    except TypeError as e:
+        return {"Error": f"Invalide param: {e}"}
+    except Exception as e:
+        return {"Error": f"Generic error: {e}"}
 
 if __name__ == "__main__":
-    app.run(debug=True, port=10000)
+    # Exemplo de uso
+    test_data = {
+        "adquirente": "bin",
+        "logico": "123456",
+        "codigo": "TF12345678"
+    }
+    print(validate_logic_number(test_data))
