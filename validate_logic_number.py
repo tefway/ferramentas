@@ -24,11 +24,11 @@ def handle_data(data) -> any:
         code = data.get("codigo")
         
         if not adquirence:
-            raise ErrInvalidParam(adquirence, "Adquirente não fornecido.")
+            raise ErrInvalidParam(adquirence, "Authorizer not provided.")
         elif not logic_number:
-            raise ErrInvalidParam(logic_number, "Número lógico não fornecido.")
+            raise ErrInvalidParam(logic_number, "Logical number not provided.")
         elif not code:
-            raise ErrInvalidParam(code, "Código não fornecido.")
+            raise ErrInvalidParam(code, "Code not provided")
 
     except ErrInvalidParam as e:
         return str(e)
@@ -75,7 +75,7 @@ def validate_logic_number(data) -> dict:
     """
     try:
         if not isinstance(data, dict):
-            raise TypeError("O argumento deve ser um dicionário JSON")
+            raise TypeError("The argument must be a JSON dictionary.")
         
         result = handle_data(data)
         if isinstance(result, tuple):
