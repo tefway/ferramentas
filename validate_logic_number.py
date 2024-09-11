@@ -104,7 +104,7 @@ def validate_logic_number(data) -> dict:
                 if re.match(r"^[a-zA-Z0-9]{32}$", logic_number) and re.match(r"^\d{9}$", code):
                     return {"Success": f"{adquirence} processed with logic number {logic_number} and code {code}"}
 
-            case "vero" | "josias":
+            case "vero":
                 return {"Info": f"{adquirence} is not yet supported"}
 
             case _:
