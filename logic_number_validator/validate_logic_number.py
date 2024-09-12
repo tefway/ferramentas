@@ -2,22 +2,30 @@ import re
 import json
 
 class ErrInvalidParam(Exception):
+    """Custom exception class for invalid parameter handling.
+    
+    Attributes:
+        value (any): The invalid parameter that caused the exception.
+        msg (str): A message describing the error.
+    """
     def __init__(self, value=None, msg=None) -> None:
         if not msg:
             msg = f"Invalid parameter found, please validate.\nValue: {value}"
         super().__init__(msg)
 
 def handle_data(data) -> any:
-    '''
-    Processa os dados recebidos pelo JSON e trata inconsistências.
+    """Handles and validates the input data, raising an error if required fields are missing.
 
     Args:
-        data (dict): Dados recebidos pela requisição JSON contendo "adquirente", "logico" e "codigo".
+        data (dict): A dictionary containing 'adquirente', 'logico', and 'codigo' keys.
 
     Returns:
-        tuple: (adquirence_lower, logic_number, code) se todos os dados forem válidos.
-        str: Mensagem de erro se houver erro nos dados.
-    '''
+        tuple: A tuple containing 'adquirente', 'logico', and 'codigo' if all are valid.
+        str: Error message if validation fails.
+
+    Raises:
+        ErrInvalidParam: If any required parameter ('adquirente', 'logico', or 'codigo') is missing.
+    """    
     try:
         adquirence = data.get("adquirente")
         logic_number = data.get("logico")
@@ -47,15 +55,14 @@ def handle_data(data) -> any:
         return "unsupported adquirence type"
 
 def process_data(adquirence, logic_number) -> str:
-    """
-    Processa o número lógico baseado no tipo de adquirente.
+    """Processes the logic number based on the adquirence rules.
 
     Args:
-        adquirence (str): O tipo de adquirente, representado por uma string.
-        logic_number (str): O número lógico que precisa ser processado.
+        adquirence (str): The name of the adquirence.
+        logic_number (str): The logical number provided for the adquirence.
 
     Returns:
-        str: O número lógico processado. 
+        str: Processed logical number, potentially zero-padded for some adquirences.
     """
     match adquirence:
         case "bin" | "fitcard" | "getnetlac" | "policard" | "safra" | "sipag" | "siscred" | "softnex" | "valeshop":
@@ -64,14 +71,20 @@ def process_data(adquirence, logic_number) -> str:
             return logic_number
 
 def validate_logic_number(data) -> dict:
-    """
-    Valida o número lógico e o código baseado no tipo de adquirente recebido via requisição HTTP POST.
+    """Validates the logical number and code for a given adquirence, ensuring they match specific patterns.
 
-    Requisição esperada:
-        - JSON com as chaves "adquirente", "logico" e "codigo".
+    Args:
+        data (dict): A dictionary containing 'adquirente', 'logico', and 'codigo' keys.
 
     Returns:
-        dict: JSON com a mensagem de sucesso ou erro
+        dict: A dictionary containing success or failure messages based on the validation.
+        The returned dictionary may have:
+            - "Success" if the validation passes.
+            - "Failure" if the data doesn't match the expected pattern.
+            - "Error" for unsupported adquirences or invalid input data.
+    
+    Raises:
+        TypeError: If the input data is not a dictionary.
     """
     try:
         if not isinstance(data, dict):
@@ -85,6 +98,8 @@ def validate_logic_number(data) -> dict:
 
         logic_number = process_data(adquirence, logic_number)
         
+        
+        
         match adquirence:
             case "adiq" | "bigcard" | "biz" | "brasil card" | "cabal" | "cardse" | "carto" | "comprocard" | "convcard" | "credishop" | "ctf frota" | "fitcard" | "globalpayments" | "marketpay" | "mettacard" | "orgcard" | "portalcard" | "rede" | "resomaq" | "softnex" | "telenet" | "valecard" | "valeshop":
                 if re.match(r"^\d{15}$", logic_number):
@@ -93,20 +108,27 @@ def validate_logic_number(data) -> dict:
             case "bin" | "getnetlac" | "safra" | "sipag":
                 if re.match(r"^\d{15}$", logic_number) and re.match(r"^TF[a-zA-Z0-9]{8}$", code):
                     return {"Success": f"{adquirence} processed with logic number {logic_number} and code {code}"}
+                else:
+                    return {"Failure":f"{adquirence.upper()} does not match with the pattern"}
 
             case "cielo":
-                if re.match(r"^4\d{8}$", logic_number):
+                if re.match(r"^4\d{7}$", logic_number):
                     return {"Success": f"{adquirence} processed with logic number {logic_number}"}
                 else:
-                    return {"Error": "Logic number does not match the param"}
+                    return {"Failure":f"{adquirence.upper()} does not match with the pattern"}
 
             case "stone":
                 if re.match(r"^[a-zA-Z0-9]{32}$", logic_number) and re.match(r"^\d{9}$", code):
                     return {"Success": f"{adquirence} processed with logic number {logic_number} and code {code}"}
+                else:
+                    return {"Failure":f"{adquirence.upper()} does not match with the pattern"}
 
             case "vero":
-                return {"Info": f"{adquirence} is not yet supported"}
-
+                if re.match(r"^04\d{13}$", logic_number) and re.match(r"^\d{11}$", code):
+                    return {"Success": f"{adquirence} processed with logic number {logic_number} and code {code}"}
+                else:
+                    return {"Failure":f"{adquirence.upper()} does not match with the pattern"}
+                
             case _:
                 return {"Error": "Unsupported adquirence type"}
     except TypeError as e:
@@ -115,10 +137,9 @@ def validate_logic_number(data) -> dict:
         return {"Error": f"Generic error: {e}"}
 
 if __name__ == "__main__":
-    # Exemplo de uso
     test_data = {
-        "adquirente": "bin",
-        "logico": "123456",
-        "codigo": "TF12345678"
+        "adquirente": "vero",
+        "logico": "041135700123300",
+        "codigo": "00411357000"
     }
     print(validate_logic_number(test_data))
