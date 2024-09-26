@@ -30,8 +30,12 @@ def handle_data(data) -> any:
         adquirence = data.get("adquirente")
         logic_number = data.get("logico")
         code = data.get("codigo")
-        
-        if not adquirence:
+        cnpj = data.get("cnpj")
+        product = data.get("product")
+        str(cnpj)
+        if not cnpj.isalpha():
+            pass        
+        elif not adquirence:
             raise ErrInvalidParam(adquirence, "Authorizer not provided.")
         elif not logic_number:
             raise ErrInvalidParam(logic_number, "Logical number not provided.")
@@ -50,7 +54,7 @@ def handle_data(data) -> any:
     }
     
     if adquirence_lower in valid_adquirences:
-        return adquirence_lower, logic_number, code
+        return adquirence_lower, logic_number, code, cnpj, product
     else:
         return "unsupported adquirence type"
 
@@ -92,7 +96,7 @@ def validate_logic_number(data) -> dict:
         
         result = handle_data(data)
         if isinstance(result, tuple):
-            adquirence, logic_number, code = result
+            adquirence, logic_number, code, cnpj, product  = result
         else:
             return {"Error": result}
 
@@ -101,7 +105,7 @@ def validate_logic_number(data) -> dict:
         
         
         match adquirence:
-            case "adiq" | "bigcard" | "biz" | "brasil card" | "cabal" | "cardse" | "carto" | "comprocard" | "convcard" | "credishop" | "ctf frota" | "fitcard" | "globalpayments" | "marketpay" | "mettacard" | "orgcard" | "portalcard" | "rede" | "resomaq" | "softnex" | "telenet" | "valecard" | "valeshop":
+            case "adiq" | "bigcard" | "biz" | "brasil card" | "cabal" | "carto" | "comprocard" | "convcard" | "credishop" | "ctf frota" | "fitcard" | "globalpayments" | "marketpay" | "mettacard" | "orgcard" | "portalcard" | "rede" | "resomaq" | "softnex" | "telenet" | "valecard" | "valeshop":
                 if re.match(r"^\d{15}$", logic_number):
                     return {"Success": f"{adquirence} processed with logic number {logic_number}"}
 
@@ -128,7 +132,21 @@ def validate_logic_number(data) -> dict:
                     return {"Success": f"{adquirence} processed with logic number {logic_number} and code {code}"}
                 else:
                     return {"Failure":f"{adquirence.upper()} does not match with the pattern"}
-                
+            case "cardse":
+                cnpj = re.sub("-./\[]{},;?!@#$%&", "", cnpj)
+                match product:
+                    case "pix" | "senff":
+                        if logic_number != cnpj.zfill(15):
+                            return {"Error": "cnpj and logical number differ, please validate"}
+                        else:
+                            pass
+                    case "picpay" | "ticketlog" | "goodcard":
+                        if logic_number == cnpj.zfill(15):
+                            return {"Error": "cnpj and logical number must differ, please validate"}
+                        else:
+                            pass
+                    case _:
+                        return {"Error": "Unsuported product from cardse"}
             case _:
                 return {"Error": "Unsupported adquirence type"}
     except TypeError as e:
@@ -140,6 +158,8 @@ if __name__ == "__main__":
     test_data = {
         "adquirente": "vero",
         "logico": "041135700123300",
-        "codigo": "00411357000"
+        "codigo": "00411357000",
+        "cnpj": "01.523.400/0005-50",
+        "product": "senff"
     }
     print(validate_logic_number(test_data))
